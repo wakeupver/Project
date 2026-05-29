@@ -63,9 +63,9 @@ subprojects {
                     targetSdk = deps.android.targetSdkVersion
                     multiDexEnabled = true
                 }
-                lint {
-                    abortOnError = true
-                    disable += setOf(
+                lintOptions {
+                    isAbortOnError = true
+                    disable(
                         "UnusedResources", // https://issuetracker.google.com/issues/63150366
                         "InvalidPackage",
                         "VectorPath",
