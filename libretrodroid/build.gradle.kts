@@ -9,9 +9,6 @@ android {
 
     defaultConfig {
         minSdk = 23
-        targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
@@ -35,6 +32,10 @@ android {
             version = "3.22.1"
             path = file("src/main/cpp/CMakeLists.txt")
         }
+    }
+
+    lint {
+        targetSdk = 35
     }
 
     compileOptions {
