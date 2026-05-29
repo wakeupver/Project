@@ -26,6 +26,7 @@
 
 #include <retro_miscellaneous.h>
 #include <libretro_dspfilter.h>
+#include <string/stdstring.h>
 
 #define sqr(a) ((a) * (a))
 
@@ -34,8 +35,8 @@ struct tremolo_core
    float *wavetable;
    float freq;
    float depth;
-   unsigned index;
-   unsigned maxindex;
+   int index;
+   int maxindex;
 };
 
 struct tremolo
@@ -58,7 +59,7 @@ static void tremolocore_init(struct tremolo_core *core,float depth,int samplerat
    const double offset = 1. - depth / 2.;
    core->index     = 0;
    core->maxindex  = samplerate / freq;
-   core->wavetable = (float*)malloc(core->maxindex   * sizeof(float));
+   core->wavetable = malloc(core->maxindex   * sizeof(float));
    memset(core->wavetable, 0, core->maxindex * sizeof(float));
    for (i = 0; i < core->maxindex; i++)
    {

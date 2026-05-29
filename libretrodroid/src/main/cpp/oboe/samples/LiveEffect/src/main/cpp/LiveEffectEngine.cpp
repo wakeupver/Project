@@ -31,14 +31,12 @@ void LiveEffectEngine::setPlaybackDeviceId(int32_t deviceId) {
     mPlaybackDeviceId = deviceId;
 }
 
-bool LiveEffectEngine::isAAudioSupported() {
-    oboe::AudioStreamBuilder builder;
-    return builder.isAAudioSupported();
+bool LiveEffectEngine::isAAudioRecommended() {
+    return oboe::AudioStreamBuilder::isAAudioRecommended();
 }
 
 bool LiveEffectEngine::setAudioApi(oboe::AudioApi api) {
     if (mIsEffectOn) return false;
-
     mAudioApi = api;
     return true;
 }
@@ -49,11 +47,9 @@ bool LiveEffectEngine::setEffectOn(bool isOn) {
         if (isOn) {
             success = openStreams() == oboe::Result::OK;
             if (success) {
-                mFullDuplexPass.start();
                 mIsEffectOn = isOn;
             }
         } else {
-            mFullDuplexPass.stop();
             closeStreams();
             mIsEffectOn = isOn;
        }
@@ -70,11 +66,10 @@ void LiveEffectEngine::closeStreams() {
     * which would cause the app to crash since the recording stream would be
     * null.
     */
+    mDuplexStream->stop();
     closeStream(mPlayStream);
-    mFullDuplexPass.setOutputStream(nullptr);
-
     closeStream(mRecordingStream);
-    mFullDuplexPass.setInputStream(nullptr);
+    mDuplexStream.reset();
 }
 
 oboe::Result  LiveEffectEngine::openStreams() {
@@ -86,6 +81,7 @@ oboe::Result  LiveEffectEngine::openStreams() {
     setupPlaybackStreamParameters(&outBuilder);
     oboe::Result result = outBuilder.openStream(mPlayStream);
     if (result != oboe::Result::OK) {
+        LOGE("Failed to open output stream. Error %s", oboe::convertToText(result));
         mSampleRate = oboe::kUnspecified;
         return result;
     } else {
@@ -97,13 +93,16 @@ oboe::Result  LiveEffectEngine::openStreams() {
     setupRecordingStreamParameters(&inBuilder, mSampleRate);
     result = inBuilder.openStream(mRecordingStream);
     if (result != oboe::Result::OK) {
+        LOGE("Failed to open input stream. Error %s", oboe::convertToText(result));
         closeStream(mPlayStream);
         return result;
     }
     warnIfNotLowLatency(mRecordingStream);
 
-    mFullDuplexPass.setInputStream(mRecordingStream);
-    mFullDuplexPass.setOutputStream(mPlayStream);
+    mDuplexStream = std::make_unique<FullDuplexPass>();
+    mDuplexStream->setSharedInputStream(mRecordingStream);
+    mDuplexStream->setSharedOutputStream(mPlayStream);
+    mDuplexStream->start();
     return result;
 }
 
@@ -155,6 +154,7 @@ oboe::AudioStreamBuilder *LiveEffectEngine::setupCommonStreamParameters(
     // mode.
     builder->setAudioApi(mAudioApi)
         ->setFormat(mFormat)
+        ->setFormatConversionAllowed(true)
         ->setSharingMode(oboe::SharingMode::Exclusive)
         ->setPerformanceMode(oboe::PerformanceMode::LowLatency);
     return builder;
@@ -207,7 +207,7 @@ void LiveEffectEngine::warnIfNotLowLatency(std::shared_ptr<oboe::AudioStream> &s
  */
 oboe::DataCallbackResult LiveEffectEngine::onAudioReady(
     oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
-    return mFullDuplexPass.onAudioReady(oboeStream, audioData, numFrames);
+    return mDuplexStream->onAudioReady(oboeStream, audioData, numFrames);
 }
 
 /**
@@ -234,4 +234,12 @@ void LiveEffectEngine::onErrorAfterClose(oboe::AudioStream *oboeStream,
     LOGE("%s stream Error after close: %s",
          oboe::convertToText(oboeStream->getDirection()),
          oboe::convertToText(error));
+
+    closeStreams();
+
+    // Restart the stream if the error is a disconnect.
+    if (error == oboe::Result::ErrorDisconnected) {
+        LOGI("Restarting AudioStream");
+        openStreams();
+    }
 }

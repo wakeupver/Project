@@ -25,17 +25,17 @@
 #include <audio/conversion/dual_mono.h>
 
 /* TODO: Use SIMD instructions to make this faster (or show that it's not needed) */
-void convert_to_dual_mono_float(float *s, const float *in, size_t len)
+void convert_to_dual_mono_float(float *out, const float *in, size_t frames)
 {
    unsigned i = 0;
 
-   if (!s || !in || !len)
+   if (!out || !in || !frames)
       return;
 
-   for (; i < len; i++)
+   for (; i < frames; i++)
    {
-      s[i * 2]     = in[i];
-      s[i * 2 + 1] = in[i];
+      out[i * 2] = in[i];
+      out[i * 2 + 1] = in[i];
    }
 }
 

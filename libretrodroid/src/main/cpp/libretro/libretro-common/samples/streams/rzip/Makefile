@@ -1,5 +1,4 @@
 TARGET := rzip
-TARGET_TEST := rzip_chunk_size_test
 
 LIBRETRO_COMM_DIR := ../../..
 LIBRETRO_DEPS_DIR := ../../../../deps
@@ -22,7 +21,8 @@ ifeq ($(UNAME), MSYS)
 	TARGET := rzip.exe
 endif
 
-COMMON_SOURCES := \
+SOURCES := \
+	rzip.c \
 	$(LIBRETRO_COMM_DIR)/compat/fopen_utf8.c \
 	$(LIBRETRO_COMM_DIR)/compat/compat_strl.c \
 	$(LIBRETRO_COMM_DIR)/compat/compat_strcasestr.c \
@@ -31,6 +31,7 @@ COMMON_SOURCES := \
 	$(LIBRETRO_COMM_DIR)/encodings/encoding_crc32.c \
 	$(LIBRETRO_COMM_DIR)/file/file_path.c \
 	$(LIBRETRO_COMM_DIR)/file/file_path_io.c \
+	$(LIBRETRO_COMM_DIR)/string/stdstring.c \
 	$(LIBRETRO_COMM_DIR)/streams/file_stream.c \
 	$(LIBRETRO_COMM_DIR)/streams/file_stream_transforms.c \
 	$(LIBRETRO_COMM_DIR)/streams/interface_stream.c \
@@ -46,8 +47,8 @@ COMMON_SOURCES := \
 ifneq ($(wildcard $(LIBRETRO_DEPS_DIR)/*),)
 	# If we are building from inside the RetroArch
 	# directory (i.e. if an 'external' deps directory
-	# is available), bake in zlib support
-	COMMON_SOURCES += \
+	# is avaiable), bake in zlib support
+	SOURCES += \
 		$(LIBRETRO_DEPS_DIR)/libz/adler32.c \
 		$(LIBRETRO_DEPS_DIR)/libz/libz-crc32.c \
 		$(LIBRETRO_DEPS_DIR)/libz/deflate.c \
@@ -68,12 +69,7 @@ else
 	LDFLAGS += -lz
 endif
 
-SOURCES      := rzip.c $(COMMON_SOURCES)
-SOURCES_TEST := rzip_chunk_size_test.c $(COMMON_SOURCES)
-
-OBJS      := $(SOURCES:.c=.o)
-OBJS_TEST := $(SOURCES_TEST:.c=.o)
-
+OBJS := $(SOURCES:.c=.o)
 INCLUDE_DIRS += -I$(LIBRETRO_COMM_DIR)/include
 CFLAGS += -DHAVE_ZLIB -Wall -pedantic -std=gnu99 $(INCLUDE_DIRS)
 
@@ -92,7 +88,7 @@ else
 	CFLAGS += -O2 -DNDEBUG
 endif
 
-all: $(TARGET) $(TARGET_TEST)
+all: $(TARGET)
 
 %.o: %.c
 	$(CC) -c -o $@ $< $(CFLAGS)
@@ -100,10 +96,7 @@ all: $(TARGET) $(TARGET_TEST)
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $^ $(LDFLAGS)
 
-$(TARGET_TEST): $(OBJS_TEST)
-	$(CC) -o $@ $^ $(LDFLAGS)
-
 clean:
-	rm -f $(TARGET) $(TARGET_TEST) $(OBJS) $(OBJS_TEST)
+	rm -f $(TARGET) $(OBJS)
 
 .PHONY: clean

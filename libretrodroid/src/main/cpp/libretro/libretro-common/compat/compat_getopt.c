@@ -108,66 +108,73 @@ static int parse_short(const char *optstring, char * const *argv)
       return optarg ? opt[0] : '?';
    }
 
-   /* If we see additional characters,
-    * and they don't take arguments, this
-    * means we have multiple flags in one. */
    if (embedded_arg)
+   {
+      /* If we see additional characters,
+       * and they don't take arguments, this
+       * means we have multiple flags in one. */
       memmove(&argv[0][1], &argv[0][2], strlen(&argv[0][2]) + 1);
-   else
-      optind++;
+      return opt[0];
+   }
 
+   optind++;
    return opt[0];
 }
 
 static int parse_long(const struct option *longopts, char * const *argv)
 {
-   const char *arg = &argv[0][2];
-   const char *eq  = strchr(arg, '=');
-   size_t len      = eq ? (size_t)(eq - arg) : strlen(arg);
+   size_t indice;
+   char *save  = NULL;
+   char *argv0 = strdup(&argv[0][2]);
+   char *token = strtok_r(argv0, "=", &save);
+   const struct option *opt = NULL;
 
-   for (; longopts->name; longopts++)
+   for (indice = 0; longopts[indice].name; indice++)
    {
-      const char *n = longopts->name;
-      const char *a = arg;
-      size_t rem    = len;
-
-      while (rem && *n == *a)
+      if (token && !strcmp(longopts[indice].name, token))
       {
-         n++;
-         a++;
-         rem--;
+         opt = &longopts[indice];
+         break;
       }
-
-      if (rem || *n)
-         continue;
-
-      if (longopts->has_arg)
-      {
-         if (eq)
-         {
-            optarg = (char *)(eq + 1);
-            optind++;
-         }
-         else if (argv[1])
-         {
-            optarg = argv[1];
-            optind += 2;
-         }
-         else
-            return '?';
-      }
-      else
-         optind++;
-
-      if (longopts->flag)
-      {
-         *longopts->flag = longopts->val;
-         return 0;
-      }
-      return longopts->val;
    }
 
-   return '?';
+   free(argv0);
+   argv0 = NULL;
+
+   if (!opt)
+      return '?';
+
+   /* Handle args with '=' instead of space */
+   if (opt->has_arg)
+   {
+      char *special_arg = strchr(argv[0], '=');
+      if (special_arg)
+      {
+         optarg = ++special_arg;
+         optind++;
+         return opt->val;
+      }
+   }
+
+   /* getopt_long has an "optional" arg, but we don't bother with that. */
+   if (opt->has_arg && !argv[1])
+      return '?';
+
+   if (opt->has_arg)
+   {
+      optarg = argv[1];
+      optind += 2;
+   }
+   else
+      optind++;
+
+   if (opt->flag)
+   {
+      *opt->flag = opt->val;
+      return 0;
+   }
+
+   return opt->val;
 }
 
 static void shuffle_block(char **begin, char **last, char **end)

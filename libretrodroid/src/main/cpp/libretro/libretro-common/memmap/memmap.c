@@ -92,9 +92,11 @@ void* mmap(void *addr, size_t len, int prot, int flags,
    return((void*) ((int8_t*)map + offset));
 }
 
-int munmap(void *addr, size_t len)
+int munmap(void *addr, size_t length)
 {
-   return (UnmapViewOfFile(addr)) ? 0 : -1;
+   if (!UnmapViewOfFile(addr))
+      return -1;
+   return 0;
 }
 
 int mprotect(void *addr, size_t len, int prot)
@@ -129,28 +131,29 @@ int mprotect(void *addr, size_t len, int prot)
 
 #endif
 
-#if defined(__MACH__) && defined(__arm__)
+#if defined(__MACH__) && (defined(__arm__) || defined(__arm64__))
 #include <libkern/OSCacheControl.h>
 #endif
 
 int memsync(void *start, void *end)
 {
-#if defined(__MACH__) && defined(__arm__)
-   size_t _len = (char*)end - (char*)start;
-   sys_dcache_flush(start, _len);
-   sys_icache_invalidate(start, _len);
+   size_t len = (char*)end - (char*)start;
+#if defined(__MACH__) && (defined(__arm__) || defined(__arm64__))
+   sys_dcache_flush(start ,len);
+   sys_icache_invalidate(start, len);
    return 0;
 #elif defined(__arm__) && !defined(__QNX__)
+   (void)len;
    __clear_cache(start, end);
    return 0;
 #elif defined(HAVE_MMAN)
-   size_t _len = (char*)end - (char*)start;
-   return msync(start, _len, MS_SYNC | MS_INVALIDATE
+   return msync(start, len, MS_SYNC | MS_INVALIDATE
 #ifdef __QNX__
          MS_CACHE_ONLY
 #endif
          );
 #else
+   (void)len;
    return 0;
 #endif
 }

@@ -218,10 +218,12 @@ void *intfstream_init(intfstream_info_t *info)
 {
    intfstream_internal_t *intf = NULL;
    if (!info)
-      return NULL;
+      goto error;
 
-   if (!(intf = (intfstream_internal_t*)malloc(sizeof(*intf))))
-      return NULL;
+   intf = (intfstream_internal_t*)malloc(sizeof(*intf));
+
+   if (!intf)
+      goto error;
 
    intf->type            = info->type;
    intf->file.fp         = NULL;
@@ -244,24 +246,25 @@ void *intfstream_init(intfstream_info_t *info)
       case INTFSTREAM_MEMORY:
          intf->memory.writable = info->memory.writable;
          if (!intfstream_resize(intf, info))
-         {
-            free(intf);
-            return NULL;
-         }
+            goto error;
          break;
       case INTFSTREAM_CHD:
 #ifdef HAVE_CHD
          intf->chd.track = info->chd.track;
          break;
 #else
-         free(intf);
-         return NULL;
+         goto error;
 #endif
       case INTFSTREAM_RZIP:
          break;
    }
 
    return intf;
+
+error:
+   if (intf)
+      free(intf);
+   return NULL;
 }
 
 int64_t intfstream_seek(
@@ -304,26 +307,6 @@ int64_t intfstream_seek(
    }
 
    return -1;
-}
-
-int64_t intfstream_truncate(intfstream_internal_t *intf, uint64_t len)
-{
-   if (!intf)
-      return 0;
-
-   switch (intf->type)
-   {
-      case INTFSTREAM_FILE:
-         return filestream_truncate(intf->file.fp, len);
-      case INTFSTREAM_MEMORY:
-         break;
-      case INTFSTREAM_CHD:
-         break;
-      case INTFSTREAM_RZIP:
-         break;
-   }
-
-   return 0;
 }
 
 int64_t intfstream_read(intfstream_internal_t *intf, void *s, uint64_t len)
@@ -382,8 +365,8 @@ int64_t intfstream_write(intfstream_internal_t *intf,
 int intfstream_printf(intfstream_internal_t *intf,
       const char* format, ...)
 {
-   int ret;
    va_list vl;
+   int result;
 
    if (!intf)
       return 0;
@@ -392,9 +375,9 @@ int intfstream_printf(intfstream_internal_t *intf,
    {
       case INTFSTREAM_FILE:
          va_start(vl, format);
-         ret = filestream_vprintf(intf->file.fp, format, vl);
+         result = filestream_vprintf(intf->file.fp, format, vl);
          va_end(vl);
-         return ret;
+         return result;
       case INTFSTREAM_MEMORY:
          return -1;
       case INTFSTREAM_CHD:
@@ -402,9 +385,9 @@ int intfstream_printf(intfstream_internal_t *intf,
       case INTFSTREAM_RZIP:
 #if defined(HAVE_ZLIB)
          va_start(vl, format);
-         ret = rzipstream_vprintf(intf->rzip.fp, format, vl);
+         result = rzipstream_vprintf(intf->rzip.fp, format, vl);
          va_end(vl);
-         return ret;
+         return result;
 #else
          return -1;
 #endif
@@ -434,7 +417,7 @@ int64_t intfstream_get_ptr(intfstream_internal_t* intf)
 }
 
 char *intfstream_gets(intfstream_internal_t *intf,
-      char *s, uint64_t len)
+      char *buffer, uint64_t len)
 {
    if (!intf)
       return NULL;
@@ -443,19 +426,19 @@ char *intfstream_gets(intfstream_internal_t *intf,
    {
       case INTFSTREAM_FILE:
          return filestream_gets(intf->file.fp,
-               s, (size_t)len);
+               buffer, (size_t)len);
       case INTFSTREAM_MEMORY:
          return memstream_gets(intf->memory.fp,
-               s, (size_t)len);
+               buffer, (size_t)len);
       case INTFSTREAM_CHD:
 #ifdef HAVE_CHD
-         return chdstream_gets(intf->chd.fp, s, len);
+         return chdstream_gets(intf->chd.fp, buffer, len);
 #else
          break;
 #endif
       case INTFSTREAM_RZIP:
 #if defined(HAVE_ZLIB)
-         return rzipstream_gets(intf->rzip.fp, s, (size_t)len);
+         return rzipstream_gets(intf->rzip.fp, buffer, (size_t)len);
 #else
          break;
 #endif
@@ -696,11 +679,17 @@ intfstream_t* intfstream_open_file(const char *path,
    if (!fd)
       return NULL;
 
-   if (intfstream_open(fd, path, mode, hints))
-      return fd;
+   if (!intfstream_open(fd, path, mode, hints))
+      goto error;
 
-   intfstream_close(fd);
-   free(fd);
+   return fd;
+
+error:
+   if (fd)
+   {
+      intfstream_close(fd);
+      free(fd);
+   }
    return NULL;
 }
 
@@ -713,23 +702,53 @@ intfstream_t *intfstream_open_memory(void *data,
    info.type            = INTFSTREAM_MEMORY;
    info.memory.buf.data = (uint8_t*)data;
    info.memory.buf.size = size;
-   info.memory.writable = (mode & RETRO_VFS_FILE_ACCESS_WRITE) != 0;
+   info.memory.writable = false;
 
-   if (!(fd = (intfstream_t*)intfstream_init(&info)))
+   fd                   = (intfstream_t*)intfstream_init(&info);
+   if (!fd)
       return NULL;
 
-   if (intfstream_open(fd, NULL, mode, hints))
-      return fd;
+   if (!intfstream_open(fd, NULL, mode, hints))
+      goto error;
 
-   intfstream_close(fd);
-   free(fd);
+   return fd;
+
+error:
+   if (fd)
+   {
+      intfstream_close(fd);
+      free(fd);
+   }
    return NULL;
 }
 
 intfstream_t *intfstream_open_writable_memory(void *data,
       unsigned mode, unsigned hints, uint64_t size)
 {
-   return intfstream_open_memory(data, mode | RETRO_VFS_FILE_ACCESS_WRITE, hints, size);
+   intfstream_info_t info;
+   intfstream_t *fd     = NULL;
+
+   info.type            = INTFSTREAM_MEMORY;
+   info.memory.buf.data = (uint8_t*)data;
+   info.memory.buf.size = size;
+   info.memory.writable = true;
+
+   fd                   = (intfstream_t*)intfstream_init(&info);
+   if (!fd)
+      return NULL;
+
+   if (!intfstream_open(fd, NULL, mode, hints))
+      goto error;
+
+   return fd;
+
+error:
+   if (fd)
+   {
+      intfstream_close(fd);
+      free(fd);
+   }
+   return NULL;
 }
 
 intfstream_t *intfstream_open_chd_track(const char *path,
@@ -741,14 +760,22 @@ intfstream_t *intfstream_open_chd_track(const char *path,
    info.type        = INTFSTREAM_CHD;
    info.chd.track   = track;
 
-   if (!(fd = (intfstream_t*)intfstream_init(&info)))
+   fd               = (intfstream_t*)intfstream_init(&info);
+
+   if (!fd)
       return NULL;
 
-   if (intfstream_open(fd, path, mode, hints))
-      return fd;
+   if (!intfstream_open(fd, path, mode, hints))
+      goto error;
 
-   intfstream_close(fd);
-   free(fd);
+   return fd;
+
+error:
+   if (fd)
+   {
+      intfstream_close(fd);
+      free(fd);
+   }
    return NULL;
 }
 
@@ -764,10 +791,16 @@ intfstream_t* intfstream_open_rzip_file(const char *path,
    if (!fd)
       return NULL;
 
-   if (intfstream_open(fd, path, mode, RETRO_VFS_FILE_ACCESS_HINT_NONE))
-      return fd;
+   if (!intfstream_open(fd, path, mode, RETRO_VFS_FILE_ACCESS_HINT_NONE))
+      goto error;
 
-   intfstream_close(fd);
-   free(fd);
+   return fd;
+
+error:
+   if (fd)
+   {
+      intfstream_close(fd);
+      free(fd);
+   }
    return NULL;
 }

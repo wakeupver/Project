@@ -27,19 +27,19 @@
 
 #include <streams/network_stream.h>
 
-bool netstream_open(netstream_t *stream, void *buf, size_t len, size_t used)
+bool netstream_open(netstream_t *stream, void *buf, size_t size, size_t used)
 {
    if (buf)
    {
       /* Pre-allocated buffer must have a non-zero size. */
-      if (!len || used > len)
+      if (!size || used > size)
          return false;
    }
    else
    {
-      if (len)
+      if (size)
       {
-         buf = malloc(len);
+         buf = malloc(size);
          if (!buf)
             return false;
       }
@@ -48,7 +48,7 @@ bool netstream_open(netstream_t *stream, void *buf, size_t len, size_t used)
    }
 
    stream->buf  = buf;
-   stream->size = len;
+   stream->size = size;
    stream->used = used;
    stream->pos  = 0;
 
@@ -243,8 +243,6 @@ bool netstream_write(netstream_t *stream, const void *data, size_t len)
    {
       if (!stream->size)
       {
-         if (stream->buf)
-            free(stream->buf);
          stream->buf  = malloc(len);
          if (!stream->buf)
             return false;
@@ -252,14 +250,14 @@ bool netstream_write(netstream_t *stream, const void *data, size_t len)
       }
       else
       {
-         size_t _len = stream->size + (len - remaining);
-         void   *buf = realloc(stream->buf, _len);
+         size_t size = stream->size + (len - remaining);
+         void   *buf = realloc(stream->buf, size);
 
          if (!buf)
             return false;
 
          stream->buf  = buf;
-         stream->size = _len;
+         stream->size = size;
       }
    }
 

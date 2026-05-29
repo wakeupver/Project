@@ -57,18 +57,18 @@ struct content_m3u_file
 /* File Initialisation / De-Initialisation */
 
 /* Reads M3U file contents from disk
- * - Does nothing if file does not exist
+ * - Does nothing if file does not exist 
  * - Returns false in the event of an error */
 static bool m3u_file_load(m3u_file_t *m3u_file)
 {
-   size_t i;
-   char entry_label[NAME_MAX_LENGTH];
-   char entry_path[PATH_MAX_LENGTH];
    const char *file_ext      = NULL;
    int64_t file_len          = 0;
    uint8_t *file_buf         = NULL;
    struct string_list *lines = NULL;
    bool success              = false;
+   size_t i;
+   char entry_path[PATH_MAX_LENGTH];
+   char entry_label[PATH_MAX_LENGTH];
 
    entry_path[0]  = '\0';
    entry_label[0] = '\0';
@@ -79,14 +79,14 @@ static bool m3u_file_load(m3u_file_t *m3u_file)
    /* Check whether file exists
     * > If path is empty, then an error
     *   has occurred... */
-   if (!m3u_file->path || !*m3u_file->path)
+   if (string_is_empty(m3u_file->path))
       goto end;
 
    /* > File must have the correct extension */
    file_ext = path_get_extension(m3u_file->path);
 
-   if (    (!file_ext || !*file_ext)
-       || !string_is_equal_noncase(file_ext, M3U_FILE_EXT))
+   if (string_is_empty(file_ext) ||
+       !string_is_equal_noncase(file_ext, M3U_FILE_EXT))
       goto end;
 
    /* > If file does not exist, no action
@@ -127,7 +127,7 @@ static bool m3u_file_load(m3u_file_t *m3u_file)
    {
       const char *line = lines->elems[i].data;
 
-      if (!line || !*line)
+      if (string_is_empty(line))
          continue;
 
       /* Determine line 'type' */
@@ -140,13 +140,12 @@ static bool m3u_file_load(m3u_file_t *m3u_file)
           * of '#LABEL:' */
          const char *label = line + STRLEN_CONST(M3U_FILE_NONSTD_LABEL);
 
-         if (label && *label)
+         if (!string_is_empty(label))
          {
             strlcpy(
                   entry_label, line + STRLEN_CONST(M3U_FILE_NONSTD_LABEL),
                   sizeof(entry_label));
-            string_trim_whitespace_right(entry_label);
-            string_trim_whitespace_left(entry_label);
+            string_trim_whitespace(entry_label);
          }
       }
       /* > '#EXTINF:' */
@@ -159,14 +158,13 @@ static bool m3u_file_load(m3u_file_t *m3u_file)
                line + STRLEN_CONST(M3U_FILE_EXTSTD_LABEL),
                M3U_FILE_EXTSTD_LABEL_TOKEN);
 
-         if (label_ptr && *label_ptr)
+         if (!string_is_empty(label_ptr))
          {
             label_ptr++;
-            if (label_ptr && *label_ptr)
+            if (!string_is_empty(label_ptr))
             {
                strlcpy(entry_label, label_ptr, sizeof(entry_label));
-               string_trim_whitespace_right(entry_label);
-               string_trim_whitespace_left(entry_label);
+               string_trim_whitespace(entry_label);
             }
          }
       }
@@ -182,18 +180,17 @@ static bool m3u_file_load(m3u_file_t *m3u_file)
 
          if (token_ptr)
          {
-            size_t _len = (size_t)(1 + token_ptr - line);
+            size_t len = (size_t)(1 + token_ptr - line);
 
             /* Get entry_path segment */
-            if (_len > 0)
+            if (len > 0)
             {
                memset(entry_path, 0, sizeof(entry_path));
                strlcpy(
                      entry_path, line,
-                     ((_len < PATH_MAX_LENGTH ?
-                       _len : PATH_MAX_LENGTH) * sizeof(char)));
-               string_trim_whitespace_right(entry_path);
-               string_trim_whitespace_left(entry_path);
+                     ((len < PATH_MAX_LENGTH ?
+                           len : PATH_MAX_LENGTH) * sizeof(char)));
+               string_trim_whitespace(entry_path);
             }
 
             /* Get entry_label segment */
@@ -201,16 +198,14 @@ static bool m3u_file_load(m3u_file_t *m3u_file)
             if (*token_ptr != '\0')
             {
                strlcpy(entry_label, token_ptr, sizeof(entry_label));
-               string_trim_whitespace_right(entry_label);
-               string_trim_whitespace_left(entry_label);
+               string_trim_whitespace(entry_label);
             }
          }
          else
          {
             /* Just a normal file name/path */
             strlcpy(entry_path, line, sizeof(entry_path));
-            string_trim_whitespace_right(entry_path);
-            string_trim_whitespace_left(entry_path);
+            string_trim_whitespace(entry_path);
          }
 
          /* Add entry to file
@@ -218,8 +213,8 @@ static bool m3u_file_load(m3u_file_t *m3u_file)
           *   can fail here is if we run out of memory.
           *   This is a critical error, and m3u_file must
           *   be considered invalid in this case */
-         if (*entry_path
-             && !m3u_file_add_entry(m3u_file, entry_path, entry_label))
+         if (!string_is_empty(entry_path) &&
+             !m3u_file_add_entry(m3u_file, entry_path, entry_label))
             goto end;
 
          /* Reset entry_path/entry_label */
@@ -260,19 +255,23 @@ m3u_file_t *m3u_file_init(const char *path)
    m3u_file_t *m3u_file = NULL;
    char m3u_path[PATH_MAX_LENGTH];
 
+   m3u_path[0] = '\0';
+
    /* Sanity check */
-   if (!path || !*path)
+   if (string_is_empty(path))
       return NULL;
 
    /* Get 'real' file path */
    strlcpy(m3u_path, path, sizeof(m3u_path));
    path_resolve_realpath(m3u_path, sizeof(m3u_path), false);
 
-   if (!*m3u_path)
+   if (string_is_empty(m3u_path))
       return NULL;
 
    /* Create m3u_file_t object */
-   if (!(m3u_file = (m3u_file_t*)malloc(sizeof(*m3u_file))))
+   m3u_file = (m3u_file_t*)malloc(sizeof(*m3u_file));
+
+   if (!m3u_file)
       return NULL;
 
    /* Initialise members */
@@ -395,7 +394,7 @@ bool m3u_file_add_entry(
 
    full_path[0] = '\0';
 
-   if (!m3u_file || (!path || !*path))
+   if (!m3u_file || string_is_empty(path))
       return false;
 
    /* Get current number of file entries */
@@ -416,7 +415,7 @@ bool m3u_file_add_entry(
    /* Copy path and label */
    entry->path = strdup(path);
 
-   if (label && *label)
+   if (!string_is_empty(label))
       entry->label = strdup(label);
 
    /* Populate 'full_path' field */
@@ -431,7 +430,7 @@ bool m3u_file_add_entry(
             sizeof(full_path));
 
    /* Handle unforeseen errors... */
-   if (!*full_path)
+   if (string_is_empty(full_path))
    {
       m3u_file_free_entry(entry);
       return false;
@@ -472,27 +471,33 @@ void m3u_file_clear(m3u_file_t *m3u_file)
 bool m3u_file_save(
       m3u_file_t *m3u_file, enum m3u_file_label_type label_type)
 {
+   RFILE *file = NULL;
    size_t i;
-   char base_dir[DIR_MAX_LENGTH];
-   RFILE *file      = NULL;
+   char base_dir[PATH_MAX_LENGTH];
+
+   base_dir[0] = '\0';
 
    if (!m3u_file || !m3u_file->entries)
       return false;
 
    /* This should never happen */
-   if (!m3u_file->path || !*m3u_file->path)
+   if (string_is_empty(m3u_file->path))
       return false;
 
    /* Get M3U file base directory */
    if (find_last_slash(m3u_file->path))
-      fill_pathname_basedir(base_dir, m3u_file->path, sizeof(base_dir));
-   else
-      base_dir[0]   = '\0';
+   {
+      strlcpy(base_dir, m3u_file->path, sizeof(base_dir));
+      path_basedir(base_dir);
+   }
 
    /* Open file for writing */
-   if (!(file = filestream_open(m3u_file->path,
+   file = filestream_open(
+         m3u_file->path,
          RETRO_VFS_FILE_ACCESS_WRITE,
-         RETRO_VFS_FILE_ACCESS_HINT_NONE)))
+         RETRO_VFS_FILE_ACCESS_HINT_NONE);
+
+   if (!file)
       return false;
 
    /* Loop over entries */
@@ -503,12 +508,12 @@ bool m3u_file_save(
 
       entry_path[0] = '\0';
 
-      if (!entry || (!entry->full_path || !*entry->full_path))
+      if (!entry || string_is_empty(entry->full_path))
          continue;
 
       /* When writing M3U files, entry paths are
        * always relative */
-      if (!*base_dir)
+      if (string_is_empty(base_dir))
          strlcpy(
                entry_path, entry->full_path,
                sizeof(entry_path));
@@ -517,11 +522,11 @@ bool m3u_file_save(
                entry_path, entry->full_path, base_dir,
                sizeof(entry_path));
 
-      if (!*entry_path)
+      if (string_is_empty(entry_path))
          continue;
 
       /* Check if we need to write a label */
-      if (entry->label && *entry->label)
+      if (!string_is_empty(entry->label))
       {
          switch (label_type)
          {
@@ -570,7 +575,7 @@ static int m3u_file_qsort_func(
    if (!a || !b)
       return 0;
 
-   if ((!a->full_path || !*a->full_path) || (!b->full_path || !*b->full_path))
+   if (string_is_empty(a->full_path) || string_is_empty(b->full_path))
       return 0;
 
    return strcasecmp(a->full_path, b->full_path);
@@ -600,19 +605,29 @@ void m3u_file_qsort(m3u_file_t *m3u_file)
 bool m3u_file_is_m3u(const char *path)
 {
    const char *file_ext = NULL;
-   if (!path || !*path)
+   int32_t file_size;
+
+   if (string_is_empty(path))
       return false;
+
    /* Check file extension */
    file_ext = path_get_extension(path);
-   if (!file_ext || !*file_ext)
+
+   if (string_is_empty(file_ext))
       return false;
+
    if (!string_is_equal_noncase(file_ext, M3U_FILE_EXT))
       return false;
+
    /* Ensure file exists */
    if (!path_is_valid(path))
       return false;
+
    /* Ensure we have non-zero file size */
-   if (path_get_size(path) <= 0)
+   file_size = path_get_size(path);
+
+   if (file_size <= 0)
       return false;
+
    return true;
 }

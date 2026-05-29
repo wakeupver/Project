@@ -49,8 +49,7 @@ bool rbmp_save_image(
       enum rbmp_source_type type);
 
 int rbmp_process_image(rbmp_t *rbmp, void **buf,
-      size_t size, unsigned *width, unsigned *height,
-      bool supports_rgba);
+      size_t size, unsigned *width, unsigned *height);
 
 void form_bmp_header(uint8_t *header,
       unsigned width, unsigned height,

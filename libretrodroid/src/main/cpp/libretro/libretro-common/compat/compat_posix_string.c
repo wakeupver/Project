@@ -56,11 +56,12 @@ int retro_strcasecmp__(const char *a, const char *b)
 
 char *retro_strdup__(const char *orig)
 {
-   size_t _len = strlen(orig) + 1;
-   char *ret   = (char*)malloc(_len);
+   size_t len = strlen(orig) + 1;
+   char *ret  = (char*)malloc(len);
    if (!ret)
       return NULL;
-   memcpy(ret, orig, _len);
+
+   strlcpy(ret, orig, len);
    return ret;
 }
 
@@ -99,4 +100,5 @@ char *retro_strtok_r__(char *str, const char *delim, char **saveptr)
 
    return first;
 }
+
 #endif

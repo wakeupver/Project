@@ -29,24 +29,24 @@
 
 #include <queues/fifo_queue.h>
 
-static bool fifo_initialize_internal(fifo_buffer_t *buf, size_t len)
+static bool fifo_initialize_internal(fifo_buffer_t *buf, size_t size)
 {
-   uint8_t *buffer    = (uint8_t*)calloc(1, len + 1);
+   uint8_t *buffer    = (uint8_t*)calloc(1, size + 1);
 
    if (!buffer)
       return false;
 
    buf->buffer        = buffer;
-   buf->size          = len + 1;
+   buf->size          = size + 1;
    buf->first         = 0;
    buf->end           = 0;
 
    return true;
 }
 
-bool fifo_initialize(fifo_buffer_t *buf, size_t len)
+bool fifo_initialize(fifo_buffer_t *buf, size_t size)
 {
-   return (buf && fifo_initialize_internal(buf, len));
+   return (buf && fifo_initialize_internal(buf, size));
 }
 
 void fifo_free(fifo_buffer_t *buffer)
@@ -73,14 +73,14 @@ bool fifo_deinitialize(fifo_buffer_t *buffer)
    return true;
 }
 
-fifo_buffer_t *fifo_new(size_t len)
+fifo_buffer_t *fifo_new(size_t size)
 {
    fifo_buffer_t *buf = (fifo_buffer_t*)malloc(sizeof(*buf));
 
    if (!buf)
       return NULL;
 
-   if (!fifo_initialize_internal(buf, len))
+   if (!fifo_initialize_internal(buf, size))
    {
       free(buf);
       return NULL;
@@ -89,38 +89,36 @@ fifo_buffer_t *fifo_new(size_t len)
    return buf;
 }
 
-void fifo_write(fifo_buffer_t *buffer, const void *in_buf, size_t len)
+void fifo_write(fifo_buffer_t *buffer, const void *in_buf, size_t size)
 {
-   size_t first_write = len;
+   size_t first_write = size;
    size_t rest_write  = 0;
 
-   if (buffer->end + len > buffer->size)
+   if (buffer->end + size > buffer->size)
    {
       first_write = buffer->size - buffer->end;
-      rest_write  = len - first_write;
+      rest_write  = size - first_write;
    }
 
    memcpy(buffer->buffer + buffer->end, in_buf, first_write);
-   if (rest_write > 0)
-      memcpy(buffer->buffer, (const uint8_t*)in_buf + first_write, rest_write);
+   memcpy(buffer->buffer, (const uint8_t*)in_buf + first_write, rest_write);
 
-   buffer->end = (buffer->end + len) % buffer->size;
+   buffer->end = (buffer->end + size) % buffer->size;
 }
 
-void fifo_read(fifo_buffer_t *buffer, void *in_buf, size_t len)
+void fifo_read(fifo_buffer_t *buffer, void *in_buf, size_t size)
 {
-   size_t first_read = len;
+   size_t first_read = size;
    size_t rest_read  = 0;
 
-   if (buffer->first + len > buffer->size)
+   if (buffer->first + size > buffer->size)
    {
       first_read = buffer->size - buffer->first;
-      rest_read  = len - first_read;
+      rest_read  = size - first_read;
    }
 
    memcpy(in_buf, (const uint8_t*)buffer->buffer + buffer->first, first_read);
-   if (rest_read > 0)
-      memcpy((uint8_t*)in_buf + first_read, buffer->buffer, rest_read);
+   memcpy((uint8_t*)in_buf + first_read, buffer->buffer, rest_read);
 
-   buffer->first = (buffer->first + len) % buffer->size;
+   buffer->first = (buffer->first + size) % buffer->size;
 }

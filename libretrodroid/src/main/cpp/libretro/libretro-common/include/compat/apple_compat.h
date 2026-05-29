@@ -25,7 +25,6 @@
 
 #ifdef __APPLE__
 #include <AvailabilityMacros.h>
-#include <CoreFoundation/CoreFoundation.h>
 #endif
 
 #ifdef __OBJC__

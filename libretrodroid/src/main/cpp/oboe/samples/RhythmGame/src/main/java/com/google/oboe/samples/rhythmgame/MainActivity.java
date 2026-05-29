@@ -29,6 +29,12 @@ public class MainActivity extends AppCompatActivity {
 
     // Used to load the 'native-lib' library on application startup.
     static {
+        if (BuildConfig.FLAVOR == "ffmpegExtractor"){
+            System.loadLibrary("avutil");
+            System.loadLibrary("swresample");
+            System.loadLibrary("avcodec");
+            System.loadLibrary("avformat");
+        }
         System.loadLibrary("native-lib");
     }
 
@@ -46,8 +52,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     protected void onPause(){
-        super.onPause();
         native_onStop();
+        super.onPause();
     }
 
     static void setDefaultStreamValues(Context context) {
